@@ -132,7 +132,7 @@ export async function getActivationCodes() {
             .from('activation_codes')
             .select(`
                 *,
-                student:profiles!activation_codes_used_by_student_id_fkey(full_name, email, phone_number)
+                student:profiles!activation_codes_used_by_student_id_fkey(full_name, phone_number)
             `)
             .order('created_at', { ascending: false })
 
@@ -257,7 +257,7 @@ export async function getEnrollments() {
             .from('enrollments')
             .select(`
                 *,
-                student:profiles(full_name, email, phone_number),
+                student:profiles(full_name, phone_number),
                 course:courses(title),
                 bundle:bundles(title)
             `)
@@ -294,16 +294,26 @@ export async function deleteEnrollment(enrollmentId) {
 export async function getDevices() {
     const supabase = await createClient()
     try {
-        const { data, error } = await supabase
+        // لا نطلب email لأن عمود email غير موجود في جدول profiles بالسكيما
+        const { data: devices, error: devicesError } = await supabase
             .from('student_devices')
-            .select(`
-                *,
-                student:profiles(id, full_name, phone_number, email)
-            `)
+            .select('*')
             .order('created_at', { ascending: false })
 
-        if (error) throw error
-        return data || []
+        if (devicesError) throw devicesError
+        if (!devices?.length) return []
+
+        const studentIds = [...new Set(devices.map((d) => d.student_id).filter(Boolean))]
+        const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, phone_number')
+            .in('id', studentIds)
+
+        const profileMap = Object.fromEntries((profiles || []).map((p) => [p.id, p]))
+        return devices.map((d) => ({
+            ...d,
+            student: d.student_id ? profileMap[d.student_id] ?? null : null,
+        }))
     } catch (error) {
         console.error("Error fetching devices:", error)
         return []
@@ -642,6 +652,7 @@ export async function createChapter(courseId, title) {
         if (error) throw error
 
         revalidatePath(`/admin/courses/${courseId}`)
+        revalidatePath('/admin/lessons')
         return { success: true, message: "تم إضافة الفصل" }
     } catch (error) {
         return { success: false, message: "خطأ في إضافة الفصل" }
@@ -654,9 +665,34 @@ export async function deleteChapter(id, courseId) {
         const { error } = await supabase.from('chapters').delete().eq('id', id)
         if (error) throw error
         revalidatePath(`/admin/courses/${courseId}`)
+        revalidatePath('/admin/lessons')
         return { success: true, message: "تم حذف الفصل" }
     } catch (error) {
         return { success: false, message: "خطأ في حذف الفصل" }
+    }
+}
+
+export async function getChapters() {
+    const supabase = await createClient()
+    try {
+        const { data, error } = await supabase
+            .from('chapters')
+            .select(`
+                *,
+                course:courses(id, title),
+                lessons(id)
+            `)
+            .order('sort_order', { ascending: true })
+
+        if (error) throw error
+        return (data || []).map(ch => ({
+            ...ch,
+            lesson_count: ch.lessons?.length || 0,
+            lessons: undefined,
+        }))
+    } catch (error) {
+        console.error("Error fetching chapters:", error)
+        return []
     }
 }
 
@@ -881,7 +917,7 @@ export async function getExamResults() {
             .from('exam_results')
             .select(`
                 *,
-                student:profiles(full_name, email),
+                student:profiles(full_name, phone_number),
                 exam:lessons(title)
             `)
             .order('created_at', { ascending: false })

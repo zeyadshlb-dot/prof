@@ -140,7 +140,7 @@ export function ExamResultsContent({ initialResults }) {
                                                         {result.student?.full_name || "طالب محذوف"}
                                                     </div>
                                                     <span className="text-xs text-muted-foreground pr-5">
-                                                        {result.student?.email || "-"}
+                                                        {result.student?.phone_number || "-"}
                                                     </span>
                                                 </div>
                                             </TableCell>

@@ -32,7 +32,8 @@ import {
     Wallet,
     CheckCircle2,
     Printer,
-    RefreshCw
+    RefreshCw,
+    Search
 } from "lucide-react"
 import {
     Select,
@@ -50,11 +51,23 @@ export function ActivationCodesContent({ initialCodes, courses, bundles }) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [currentPage, setCurrentPage] = useState(1)
+    const [filterQuery, setFilterQuery] = useState("")
     const { toast } = useToast()
     const ITEMS_PER_PAGE = 20
 
-    const totalPages = Math.ceil(codes.length / ITEMS_PER_PAGE)
-    const paginatedCodes = codes.slice(
+    // فلترة بالكود أو اسم الكورس/الباقة أو اسم الطالب
+    const filteredCodes = filterQuery.trim()
+        ? codes.filter((code) => {
+            const q = filterQuery.toLowerCase()
+            const title = (code.course?.title || code.bundle?.title || "").toLowerCase()
+            const codeStr = (code.code || "").toLowerCase()
+            const studentName = (code.student?.full_name || "").toLowerCase()
+            return title.includes(q) || codeStr.includes(q) || studentName.includes(q)
+        })
+        : codes
+
+    const totalPages = Math.ceil(filteredCodes.length / ITEMS_PER_PAGE)
+    const paginatedCodes = filteredCodes.slice(
         (currentPage - 1) * ITEMS_PER_PAGE,
         currentPage * ITEMS_PER_PAGE
     )
@@ -119,13 +132,24 @@ export function ActivationCodesContent({ initialCodes, courses, bundles }) {
     return (
         <div className="flex flex-col gap-6 font-(family-name:--font-cairo)">
 
-            {/* Action Bar */}
-            <div className="flex items-center justify-between">
+            {/* Action Bar + Filter */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold">أكواد التفعيل</h2>
-                    <Badge variant="secondary">{codes.length}</Badge>
+                    <Badge variant="secondary">{filteredCodes.length}</Badge>
                 </div>
-
+                <div className="relative flex-1 max-w-sm w-full">
+                    <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="فلتر بالكود أو اسم الكورس أو الطالب..."
+                        className="bg-background pr-9"
+                        value={filterQuery}
+                        onChange={(e) => {
+                            setFilterQuery(e.target.value)
+                            setCurrentPage(1)
+                        }}
+                    />
+                </div>
                 <Dialog open={open} onOpenChange={setOpen}>
                     <DialogTrigger asChild>
                         <Button className="gap-2">
@@ -235,10 +259,12 @@ export function ActivationCodesContent({ initialCodes, courses, bundles }) {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {codes.length === 0 ? (
+                        {filteredCodes.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                                    لا توجد أكواد تفعيل حالياً. قم بإنشاء بعض الأكواد.
+                                    {codes.length === 0
+                                        ? "لا توجد أكواد تفعيل حالياً. قم بإنشاء بعض الأكواد."
+                                        : "لا توجد نتائج تطابق الفلتر."}
                                 </TableCell>
                             </TableRow>
                         ) : (

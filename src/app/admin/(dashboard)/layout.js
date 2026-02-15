@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
-    Bell,
     Home,
     Menu,
     Package,
@@ -20,27 +19,20 @@ import {
     Search,
     LogOut,
     Settings,
-    HeadphonesIcon,
     ChevronLeft,
     LayoutDashboard,
-    Sparkles,
     Zap,
+    X,
+    Moon,
+    Sun,
+    Bell,
+    ChevronDown,
+    PanelLeftClose,
+    PanelLeft,
+    FolderOpen,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { ModeToggle } from "@/components/mode-toggle"
-import { NotificationsPanel } from "@/components/notifications-panel"
+import { useTheme } from "@/components/theme-provider"
 import { getSidebarCounts } from "@/lib/actions"
 import { cn } from "@/lib/utils"
 
@@ -48,7 +40,7 @@ const sidebarLinks = [
     { href: "/admin", label: "الرئيسية", icon: LayoutDashboard, exact: true, section: "main" },
     { href: "/admin/students", label: "الطلاب", icon: Users, section: "main", countKey: "totalStudents" },
     { href: "/admin/courses", label: "الكورسات", icon: BookOpen, section: "content" },
-    { href: "/admin/lessons", label: "الفصول والدروس", icon: Video, section: "content" },
+    { href: "/admin/lessons", label: "الفصول والدروس", icon: FolderOpen, section: "content" },
     { href: "/admin/categories", label: "التصنيفات", icon: Layers, section: "content" },
     { href: "/admin/bundles", label: "الباقات", icon: Package, section: "content" },
     { href: "/admin/activation-codes", label: "أكواد التفعيل", icon: KeyRound, section: "sales", countKey: "unusedCodes" },
@@ -64,43 +56,11 @@ const sectionLabels = {
     analytics: "التحليلات",
 }
 
-function SidebarLink({ href, label, icon: Icon, badge, isMobile = false, isActive = false }) {
-    return (
-        <Link
-            href={href}
-            className={cn(
-                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300",
-                isMobile ? "gap-4 px-3" : "",
-                isActive
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/80"
-            )}
-        >
-            <div className={cn(
-                "flex items-center justify-center h-8 w-8 rounded-lg transition-all duration-300",
-                isActive
-                    ? "bg-primary-foreground/15"
-                    : "bg-transparent group-hover:bg-muted/60"
-            )}>
-                <Icon className={cn(
-                    "shrink-0 transition-all duration-300 group-hover:scale-110",
-                    isMobile ? "h-5 w-5" : "h-4 w-4",
-                    isActive ? "text-primary-foreground" : ""
-                )} />
-            </div>
-            <span>{label}</span>
-            {badge && badge !== "0" && (
-                <Badge className={cn(
-                    "mr-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold px-1.5 transition-all",
-                    isActive
-                        ? "bg-primary-foreground/20 text-primary-foreground border-0"
-                        : "bg-primary/10 text-primary border-primary/20"
-                )}>
-                    {badge}
-                </Badge>
-            )}
-        </Link>
-    )
+const sectionIcons = {
+    main: "🏠",
+    content: "📚",
+    sales: "💰",
+    analytics: "📊",
 }
 
 function isLinkActive(pathname, href, exact = false) {
@@ -110,222 +70,326 @@ function isLinkActive(pathname, href, exact = false) {
 
 export default function AdminLayout({ children }) {
     const pathname = usePathname()
+    const router = useRouter()
+    const { theme, setTheme } = useTheme()
     const activeLink = sidebarLinks.find(link => isLinkActive(pathname, link.href, link.exact))
     const [counts, setCounts] = useState({})
+    const [mobileOpen, setMobileOpen] = useState(false)
+    const [collapsed, setCollapsed] = useState(false)
 
-    // Fetch sidebar counts
     useEffect(() => {
         getSidebarCounts().then(setCounts)
         const interval = setInterval(() => {
             getSidebarCounts().then(setCounts)
-        }, 120000) // every 2 minutes
+        }, 120000)
         return () => clearInterval(interval)
     }, [])
 
-    // Group links by section
+    // Close mobile menu on route change
+    useEffect(() => {
+        setMobileOpen(false)
+    }, [pathname])
+
+    const handleLogout = () => {
+        document.cookie = "admin_session=; path=/; max-age=0"
+        router.push("/admin/login")
+    }
+
     const sections = {}
     sidebarLinks.forEach(link => {
         if (!sections[link.section]) sections[link.section] = []
         sections[link.section].push(link)
     })
 
-    const renderLinks = (links, isMobile = false) => (
-        links.map((link) => (
-            <SidebarLink
-                key={link.href}
-                {...link}
-                badge={link.countKey && counts[link.countKey] !== undefined ? String(counts[link.countKey]) : undefined}
-                isMobile={isMobile}
-                isActive={isLinkActive(pathname, link.href, link.exact)}
-            />
-        ))
-    )
-
     return (
-        <div dir="rtl" className="grid min-h-screen w-full md:grid-cols-[272px_1fr] lg:grid-cols-[288px_1fr] font-(family-name:--font-cairo)">
-            {/* ==================== DESKTOP SIDEBAR ==================== */}
-            <div className="hidden md:block">
-                <div className="flex h-screen flex-col sticky top-0 border-l bg-gradient-to-b from-card to-card/95">
+        <div dir="rtl" className="min-h-screen bg-background font-[family-name:var(--font-cairo)]">
 
-                    {/* Logo Section */}
-                    <div className="flex h-[72px] items-center gap-3 px-5 border-b">
-                        <div className="relative">
-                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/25 transition-transform hover:scale-105">
-                                <GraduationCap className="h-5 w-5 text-primary-foreground" />
+            {/* ==================== SIDEBAR ==================== */}
+            {/* Desktop */}
+            <aside className={cn(
+                "fixed top-0 right-0 z-50 h-screen hidden md:flex flex-col transition-all duration-300 ease-in-out",
+                collapsed ? "w-[72px]" : "w-[264px]"
+            )}>
+                {/* Sidebar Background */}
+                <div className="absolute inset-0 bg-card/95 dark:bg-[#111318]/95 backdrop-blur-xl border-l border-border/40" />
+
+                {/* Content */}
+                <div className="relative flex flex-col h-full">
+                    {/* Logo */}
+                    <div className={cn(
+                        "flex items-center h-16 px-4 border-b border-border/30",
+                        collapsed ? "justify-center" : "gap-3"
+                    )}>
+                        <div className="relative shrink-0">
+                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-600/20">
+                                <GraduationCap className="h-5 w-5 text-white" />
                             </div>
-                            <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-card" />
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-extrabold tracking-tight">Prof. Ser</span>
-                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                <Sparkles className="h-2.5 w-2.5 text-primary" />
-                                لوحة تحكم المدير
-                            </span>
-                        </div>
+                        {!collapsed && (
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-bold tracking-tight truncate">Prof. Ser</span>
+                                <span className="text-[10px] text-muted-foreground truncate">لوحة التحكم</span>
+                            </div>
+                        )}
+                        {!collapsed && (
+                            <button
+                                onClick={() => setCollapsed(true)}
+                                className="mr-auto h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                            >
+                                <PanelLeftClose className="h-3.5 w-3.5" />
+                            </button>
+                        )}
                     </div>
 
                     {/* Navigation */}
-                    <div className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+                    <div className="flex-1 overflow-y-auto py-3 px-2.5 scrollbar-thin">
                         {Object.entries(sections).map(([sectionKey, links]) => (
-                            <div key={sectionKey}>
-                                <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em] px-3 mb-2">
-                                    {sectionLabels[sectionKey]}
-                                </p>
-                                <nav className="grid gap-1">
-                                    {renderLinks(links)}
+                            <div key={sectionKey} className="mb-4">
+                                {!collapsed && (
+                                    <div className="flex items-center gap-1.5 px-3 mb-1.5">
+                                        <span className="text-xs">{sectionIcons[sectionKey]}</span>
+                                        <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
+                                            {sectionLabels[sectionKey]}
+                                        </span>
+                                    </div>
+                                )}
+                                <nav className="space-y-0.5">
+                                    {links.map((link) => {
+                                        const Icon = link.icon
+                                        const active = isLinkActive(pathname, link.href, link.exact)
+                                        const badge = link.countKey && counts[link.countKey] !== undefined ? String(counts[link.countKey]) : undefined
+
+                                        return (
+                                            <Link
+                                                key={link.href}
+                                                href={link.href}
+                                                title={collapsed ? link.label : undefined}
+                                                className={cn(
+                                                    "group flex items-center rounded-xl transition-all duration-200 relative",
+                                                    collapsed ? "justify-center h-10 w-10 mx-auto" : "gap-3 px-3 py-2.5",
+                                                    active
+                                                        ? "bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-600/15"
+                                                        : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                                                )}
+                                            >
+                                                <Icon className={cn(
+                                                    "shrink-0 transition-transform group-hover:scale-110",
+                                                    collapsed ? "h-5 w-5" : "h-4 w-4"
+                                                )} />
+                                                {!collapsed && (
+                                                    <>
+                                                        <span className="text-[13px] font-medium">{link.label}</span>
+                                                        {badge && badge !== "0" && (
+                                                            <span className={cn(
+                                                                "mr-auto text-[10px] font-bold px-1.5 py-0.5 rounded-md min-w-[20px] text-center",
+                                                                active
+                                                                    ? "bg-white/20 text-white"
+                                                                    : "bg-violet-500/10 text-violet-500"
+                                                            )}>
+                                                                {badge}
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {/* Active Indicator */}
+                                                {active && !collapsed && (
+                                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 h-5 w-1 rounded-full bg-violet-400" />
+                                                )}
+                                            </Link>
+                                        )
+                                    })}
                                 </nav>
                             </div>
                         ))}
                     </div>
 
-                    {/* Sidebar Footer - User Card */}
-                    <div className="border-t p-4">
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] border border-primary/10 p-3">
-                            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_left,_var(--tw-gradient-stops))] from-primary/5 to-transparent" />
-                            <div className="relative flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary via-primary/80 to-primary/50 flex items-center justify-center text-primary-foreground font-bold text-sm shadow-md shadow-primary/20">
-                                    م
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-bold truncate">المدير العام</p>
-                                    <p className="text-[10px] text-muted-foreground truncate">admin@profser.com</p>
-                                </div>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all">
-                                    <LogOut className="h-3.5 w-3.5" />
-                                </Button>
+                    {/* Sidebar Footer */}
+                    <div className="border-t border-border/30 p-3">
+                        {collapsed ? (
+                            <div className="flex flex-col items-center gap-2">
+                                <button
+                                    onClick={() => setCollapsed(false)}
+                                    className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                                >
+                                    <PanelLeft className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="h-9 w-9 rounded-xl flex items-center justify-center text-red-400 hover:bg-red-500/10 transition-all"
+                                    title="تسجيل الخروج"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                </button>
                             </div>
+                        ) : (
+                            <div className="rounded-xl bg-gradient-to-br from-accent/50 to-accent/20 p-3 border border-border/30">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
+                                        م
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold truncate">المدير العام</p>
+                                        <p className="text-[10px] text-muted-foreground truncate">Prof. Ser Admin</p>
+                                    </div>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all shrink-0"
+                                        title="تسجيل الخروج"
+                                    >
+                                        <LogOut className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </aside>
+
+            {/* ==================== MOBILE OVERLAY ==================== */}
+            {mobileOpen && (
+                <div className="fixed inset-0 z-[60] md:hidden">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+
+                    {/* Menu */}
+                    <div className="absolute top-0 right-0 h-full w-[280px] bg-card dark:bg-[#111318] border-l border-border/40 shadow-2xl animate-in slide-in-from-right duration-300">
+                        {/* Mobile Header */}
+                        <div className="flex items-center justify-between h-16 px-4 border-b border-border/30">
+                            <div className="flex items-center gap-2.5">
+                                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
+                                    <GraduationCap className="h-5 w-5 text-white" />
+                                </div>
+                                <span className="font-bold text-sm">Prof. Ser</span>
+                            </div>
+                            <button onClick={() => setMobileOpen(false)} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-accent transition-colors">
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Mobile Nav */}
+                        <div className="overflow-y-auto h-[calc(100%-64px)] py-3 px-2.5">
+                            {Object.entries(sections).map(([sectionKey, links]) => (
+                                <div key={sectionKey} className="mb-4">
+                                    <div className="flex items-center gap-1.5 px-3 mb-1.5">
+                                        <span className="text-xs">{sectionIcons[sectionKey]}</span>
+                                        <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest">
+                                            {sectionLabels[sectionKey]}
+                                        </span>
+                                    </div>
+                                    <nav className="space-y-0.5">
+                                        {links.map((link) => {
+                                            const Icon = link.icon
+                                            const active = isLinkActive(pathname, link.href, link.exact)
+                                            return (
+                                                <Link
+                                                    key={link.href}
+                                                    href={link.href}
+                                                    className={cn(
+                                                        "flex items-center gap-3 rounded-xl px-3 py-3 transition-all duration-200",
+                                                        active
+                                                            ? "bg-gradient-to-l from-violet-600 to-indigo-600 text-white shadow-md"
+                                                            : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                                                    )}
+                                                >
+                                                    <Icon className="h-5 w-5 shrink-0" />
+                                                    <span className="text-sm font-medium">{link.label}</span>
+                                                </Link>
+                                            )
+                                        })}
+                                    </nav>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
-            {/* ==================== MAIN CONTENT AREA ==================== */}
-            <div className="flex flex-col min-h-screen bg-background">
+            {/* ==================== MAIN AREA ==================== */}
+            <div className={cn(
+                "min-h-screen flex flex-col transition-all duration-300",
+                collapsed ? "md:mr-[72px]" : "md:mr-[264px]"
+            )}>
 
                 {/* ===== HEADER ===== */}
-                <header className="sticky top-0 z-40 flex h-[72px] items-center gap-4 border-b bg-background/60 backdrop-blur-xl px-4 lg:px-6">
-
-                    {/* Mobile Menu */}
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="outline" size="icon" className="shrink-0 md:hidden h-9 w-9 rounded-xl">
-                                <Menu className="h-5 w-5" />
-                                <span className="sr-only">القائمة</span>
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="right" className="flex flex-col w-[300px] p-0">
-                            {/* Mobile Header */}
-                            <div className="flex items-center gap-3 p-5 border-b">
-                                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-md shadow-primary/25">
-                                    <GraduationCap className="h-5 w-5 text-primary-foreground" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-sm">Prof. Ser</span>
-                                    <span className="text-[10px] text-muted-foreground">لوحة تحكم المدير</span>
-                                </div>
-                            </div>
-                            {/* Mobile Nav */}
-                            <div className="flex-1 overflow-y-auto p-3 space-y-4">
-                                {Object.entries(sections).map(([sectionKey, links]) => (
-                                    <div key={sectionKey}>
-                                        <p className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-wider px-3 mb-1.5">
-                                            {sectionLabels[sectionKey]}
-                                        </p>
-                                        <nav className="grid gap-1">
-                                            {renderLinks(links, true)}
-                                        </nav>
-                                    </div>
-                                ))}
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                <header className="sticky top-0 z-40 h-16 flex items-center gap-3 px-4 lg:px-6 border-b border-border/40 bg-background/80 backdrop-blur-xl">
+                    {/* Mobile Menu Button */}
+                    <button
+                        onClick={() => setMobileOpen(true)}
+                        className="md:hidden h-9 w-9 rounded-xl flex items-center justify-center border border-border/50 hover:bg-accent transition-colors"
+                    >
+                        <Menu className="h-4 w-4" />
+                    </button>
 
                     {/* Breadcrumb */}
                     <div className="hidden md:flex items-center gap-2 text-sm">
-                        <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
+                        <Link href="/admin" className="text-muted-foreground hover:text-foreground transition-colors text-xs">
                             لوحة التحكم
                         </Link>
-                        <ChevronLeft className="h-3.5 w-3.5 text-muted-foreground/40 rtl:rotate-180" />
-                        <span className="font-semibold text-foreground">{activeLink?.label || "الصفحة الحالية"}</span>
+                        {activeLink && activeLink.label !== "الرئيسية" && (
+                            <>
+                                <ChevronLeft className="h-3 w-3 text-muted-foreground/40 rtl:rotate-180" />
+                                <span className="font-semibold text-foreground text-xs">{activeLink.label}</span>
+                            </>
+                        )}
                     </div>
+
+                    {/* Mobile Title */}
+                    <span className="md:hidden font-semibold text-sm">{activeLink?.label || "لوحة التحكم"}</span>
 
                     <div className="flex-1" />
 
                     {/* Search */}
-                    <div className="w-full max-w-xs lg:max-w-sm hidden sm:block">
+                    <div className="hidden sm:block w-full max-w-[280px]">
                         <div className="relative group">
-                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors duration-200" />
-                            <Input
+                            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50 group-focus-within:text-violet-500 transition-colors" />
+                            <input
                                 placeholder="بحث سريع..."
-                                className="pr-9 bg-muted/30 border-transparent focus-visible:border-primary/40 focus-visible:bg-background/80 focus-visible:ring-1 focus-visible:ring-primary/20 h-10 rounded-xl transition-all duration-300 placeholder:text-muted-foreground/50"
+                                className="w-full h-9 pr-9 pl-3 rounded-xl bg-accent/40 border-transparent text-sm placeholder:text-muted-foreground/40 focus:outline-none focus:bg-accent focus:ring-1 focus:ring-violet-500/30 transition-all"
                             />
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1 opacity-40 group-focus-within:opacity-0 transition-opacity">
-                                <span className="text-[10px] bg-background/80 border rounded-md px-1.5 py-0.5 font-mono">⌘K</span>
-                            </div>
                         </div>
                     </div>
 
-                    {/* Right Actions */}
-                    <div className="flex items-center gap-2">
-                        {/* Notifications */}
-                        <NotificationsPanel />
-
-                        <div className="h-5 w-px bg-border/50 mx-0.5 hidden sm:block" />
-
+                    {/* Actions */}
+                    <div className="flex items-center gap-1.5">
                         {/* Theme Toggle */}
-                        <ModeToggle />
+                        <button
+                            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                            className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all"
+                        >
+                            <Sun className="h-4 w-4 block dark:hidden" />
+                            <Moon className="h-4 w-4 hidden dark:block" />
+                        </button>
 
-                        {/* User Menu */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 ring-2 ring-primary/10 hover:ring-primary/30 transition-all duration-300 mr-1">
-                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary via-primary/80 to-primary/40 flex items-center justify-center text-primary-foreground font-bold text-sm shadow-md shadow-primary/20">
-                                        م
-                                    </div>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-60 p-2 rounded-xl">
-                                <DropdownMenuLabel className="flex items-center gap-3 p-3">
-                                    <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center text-primary font-bold text-sm border border-primary/10">م</div>
-                                    <div className="flex flex-col gap-0.5">
-                                        <p className="text-sm font-bold">المدير العام</p>
-                                        <p className="text-[10px] text-muted-foreground font-normal">admin@profser.com</p>
-                                    </div>
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator className="my-1.5" />
-                                <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg py-2.5 focus:bg-primary/10 focus:text-primary transition-colors">
-                                    <Settings className="h-4 w-4" />
-                                    الإعدادات العامة
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="gap-2.5 cursor-pointer rounded-lg py-2.5 focus:bg-primary/10 focus:text-primary transition-colors">
-                                    <HeadphonesIcon className="h-4 w-4" />
-                                    مركز الدعم
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator className="my-1.5" />
-                                <DropdownMenuItem className="gap-2.5 text-destructive cursor-pointer rounded-lg py-2.5 focus:bg-destructive/10 focus:text-destructive transition-colors">
-                                    <LogOut className="h-4 w-4" />
-                                    تسجيل الخروج
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        {/* Notifications */}
+                        <button className="relative h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-all">
+                            <Bell className="h-4 w-4" />
+                            <span className="absolute top-1.5 left-1.5 h-2 w-2 rounded-full bg-violet-500 ring-2 ring-background" />
+                        </button>
+
+                        <div className="h-6 w-px bg-border/50 mx-1 hidden sm:block" />
+
+                        {/* User Avatar */}
+                        <button className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-sm hover:shadow-md hover:shadow-violet-600/20 transition-all">
+                            م
+                        </button>
                     </div>
                 </header>
 
-                {/* ===== MAIN CONTENT ===== */}
-                <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 overflow-x-auto bg-gradient-to-b from-muted/20 to-transparent">
+                {/* ===== CONTENT ===== */}
+                <main className="flex-1 p-4 lg:p-6 overflow-x-auto">
                     {children}
                 </main>
 
                 {/* ===== FOOTER ===== */}
-                <footer className="py-4 text-center border-t bg-card/50 backdrop-blur-sm">
-                    <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
-                        <Zap className="h-3 w-3 text-primary" />
+                <footer className="py-3 text-center border-t border-border/30">
+                    <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+                        <Zap className="h-3 w-3 text-violet-500" />
                         تم التصميم والبرمجة بواسطة{" "}
                         <a
                             href="https://www.facebook.com/zeyad.haytham.abass"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-bold text-primary hover:underline underline-offset-2 transition-colors"
+                            className="font-bold text-violet-500 hover:underline underline-offset-2"
                         >
                             زياد شلبي
                         </a>

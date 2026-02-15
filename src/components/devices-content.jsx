@@ -61,8 +61,7 @@ export function DevicesContent({ initialDevices }) {
     const filteredGroups = groups.filter(group => {
         const query = searchQuery.toLowerCase();
         return group.student?.full_name?.toLowerCase().includes(query) ||
-            group.student?.phone_number?.includes(query) ||
-            group.student?.email?.includes(query);
+            group.student?.phone_number?.includes(query);
     });
 
     // Actions
@@ -162,12 +161,12 @@ export function DevicesContent({ initialDevices }) {
                                         </div>
                                         <div>
                                             <CardTitle className="text-base">{group.student?.full_name || "مستخدم محذوف"}</CardTitle>
-                                            <CardDescription>{group.student?.phone_number || group.student?.email || "-"}</CardDescription>
+                                            <CardDescription>{group.student?.phone_number || "-"}</CardDescription>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Badge variant={group.devices.length >= 2 ? "destructive" : "secondary"}>
-                                            {group.devices.length} / 2 جهاز
+                                        <Badge variant="secondary">
+                                            {group.devices.length} جهاز
                                         </Badge>
                                         <AlertDialog>
                                             <AlertDialogTrigger asChild>

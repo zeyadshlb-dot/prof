@@ -38,7 +38,12 @@ import {
     Smartphone,
     GraduationCap,
     Filter,
-    Users
+    Users,
+    Eye,
+    Monitor,
+    BookOpen,
+    Package as PackageIcon,
+    Ticket
 } from "lucide-react"
 import { toggleStudentBan, deleteStudent } from "@/lib/actions"
 import { useToast } from "@/components/ui/use-toast"
@@ -53,16 +58,51 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Pagination } from "@/components/ui/pagination"
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet"
 
-export function StudentsContent({ initialStudents }) {
+export function StudentsContent({ initialStudents, devices = [], enrollments = [], activationCodes = [] }) {
     const [students, setStudents] = useState(initialStudents)
     const [searchQuery, setSearchQuery] = useState("")
     const [filteredStudents, setFilteredStudents] = useState(initialStudents)
     const [deleteId, setDeleteId] = useState(null)
     const [loading, setLoading] = useState(false)
     const [currentPage, setCurrentPage] = useState(1)
+    const [selectedStudent, setSelectedStudent] = useState(null)
+    const [courseFilter, setCourseFilter] = useState("")
     const { toast } = useToast()
     const ITEMS_PER_PAGE = 15
+
+    // بيانات الطالب المحدد للتفاصيل
+    const studentDevices = selectedStudent
+        ? devices.filter((d) => d.student_id === selectedStudent.id)
+        : []
+    const studentEnrollmentsRaw = selectedStudent
+        ? enrollments.filter((e) => e.student_id === selectedStudent.id)
+        : []
+    const studentCodesRaw = selectedStudent
+        ? activationCodes.filter(
+            (c) => (c.used_by_student_id === selectedStudent.id) && c.is_used
+        )
+        : []
+    const courseFilterLower = courseFilter.trim().toLowerCase()
+    const studentEnrollments = courseFilterLower
+        ? studentEnrollmentsRaw.filter((e) => {
+            const title = (e.course?.title || e.bundle?.title || "").toLowerCase()
+            return title.includes(courseFilterLower)
+        })
+        : studentEnrollmentsRaw
+    const studentCodes = courseFilterLower
+        ? studentCodesRaw.filter((c) => {
+            const title = (c.course?.title || c.bundle?.title || "").toLowerCase()
+            return title.includes(courseFilterLower)
+        })
+        : studentCodesRaw
 
     // الفلترة والبحث
     const handleSearch = (e) => {
@@ -77,8 +117,7 @@ export function StudentsContent({ initialStudents }) {
 
         const filtered = students.filter(student =>
             student.full_name?.toLowerCase().includes(query) ||
-            student.phone_number?.includes(query) ||
-            student.email?.toLowerCase().includes(query)
+            student.phone_number?.includes(query)
         )
         setFilteredStudents(filtered)
     }
@@ -244,7 +283,7 @@ export function StudentsContent({ initialStudents }) {
                                                 </Avatar>
                                                 <div className="flex flex-col">
                                                     <span className="font-medium text-sm">{student.full_name}</span>
-                                                    <span className="text-xs text-muted-foreground">{student.email || "بدون بريد"}</span>
+                                                    <span className="text-xs text-muted-foreground">{student.academic_year || "غير محدد"}</span>
                                                 </div>
                                             </div>
                                         </TableCell>
@@ -278,6 +317,10 @@ export function StudentsContent({ initialStudents }) {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => setSelectedStudent(student)}>
+                                                        <Eye className="mr-2 h-4 w-4 ml-2" />
+                                                        عرض التفاصيل (أجهزة، تفعيلات، أكواد)
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => navigator.clipboard.writeText(student.id)}>
                                                         نسخ المعرف (ID)
                                                     </DropdownMenuItem>
@@ -322,6 +365,144 @@ export function StudentsContent({ initialStudents }) {
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
             />
+
+            {/* تفاصيل الطالب: أجهزة، تفعيلات، أكواد */}
+            <Sheet open={!!selectedStudent} onOpenChange={(open) => !open && setSelectedStudent(null)}>
+                <SheetContent side="left" className="w-full sm:max-w-xl overflow-y-auto">
+                    <SheetHeader>
+                        <SheetTitle>
+                            {selectedStudent?.full_name || "تفاصيل الطالب"}
+                        </SheetTitle>
+                        <SheetDescription>
+                            {selectedStudent?.phone_number || ""}
+                        </SheetDescription>
+                    </SheetHeader>
+                    {selectedStudent && (
+                        <div className="mt-6 space-y-6">
+                            {/* فلتر باسم الكورس */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">فلتر باسم الكورس / الباقة</label>
+                                <Input
+                                    placeholder="ابحث باسم الكورس..."
+                                    value={courseFilter}
+                                    onChange={(e) => setCourseFilter(e.target.value)}
+                                    className="bg-background"
+                                />
+                            </div>
+
+                            {/* أجهزة الطالب */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold flex items-center gap-2">
+                                    <Monitor className="h-4 w-4" />
+                                    الأجهزة المسجلة ({studentDevices.length})
+                                </h4>
+                                {studentDevices.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">لا توجد أجهزة مسجلة</p>
+                                ) : (
+                                    <div className="rounded-md border">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-muted/50">
+                                                    <TableHead>الجهاز</TableHead>
+                                                    <TableHead>آخر دخول</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {studentDevices.map((d) => (
+                                                    <TableRow key={d.id}>
+                                                        <TableCell className="font-medium text-sm">{d.device_name || "غير معروف"}</TableCell>
+                                                        <TableCell className="text-xs text-muted-foreground">
+                                                            {d.last_active ? new Date(d.last_active).toLocaleString("ar-EG") : "—"}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* التفعيلات (الاشتراكات) */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold flex items-center gap-2">
+                                    <BookOpen className="h-4 w-4" />
+                                    التفعيلات / الاشتراكات ({studentEnrollments.length})
+                                </h4>
+                                {studentEnrollments.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">لا توجد تفعيلات أو لا تطابق الفلتر</p>
+                                ) : (
+                                    <div className="rounded-md border">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-muted/50">
+                                                    <TableHead>اسم الكورس / الباقة</TableHead>
+                                                    <TableHead>النوع</TableHead>
+                                                    <TableHead>تاريخ التفعيل</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {studentEnrollments.map((e) => (
+                                                    <TableRow key={e.id}>
+                                                        <TableCell className="font-medium text-sm">
+                                                            {e.course?.title || e.bundle?.title || "—"}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {e.course ? (
+                                                                <Badge variant="outline" className="text-xs">كورس</Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="text-xs bg-violet-500/10">باقة</Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-xs text-muted-foreground">
+                                                            {e.activated_at ? new Date(e.activated_at).toLocaleDateString("ar-EG") : "—"}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* أكواد التفعيل المستخدمة */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold flex items-center gap-2">
+                                    <Ticket className="h-4 w-4" />
+                                    أكواد التفعيل المستخدمة ({studentCodes.length})
+                                </h4>
+                                {studentCodes.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">لا توجد أكواد مستخدمة أو لا تطابق الفلتر</p>
+                                ) : (
+                                    <div className="rounded-md border">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow className="bg-muted/50">
+                                                    <TableHead>الكود</TableHead>
+                                                    <TableHead>اسم الكورس / الباقة</TableHead>
+                                                    <TableHead>تاريخ الاستخدام</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {studentCodes.map((c) => (
+                                                    <TableRow key={c.code}>
+                                                        <TableCell className="font-mono text-xs">{c.code}</TableCell>
+                                                        <TableCell className="font-medium text-sm">
+                                                            {c.course?.title || c.bundle?.title || "—"}
+                                                        </TableCell>
+                                                        <TableCell className="text-xs text-muted-foreground">
+                                                            {c.used_at ? new Date(c.used_at).toLocaleDateString("ar-EG") : "—"}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </SheetContent>
+            </Sheet>
 
             {/* Delete Alert Dialog */}
             <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
